@@ -11,5 +11,5 @@ Provide a query interface (command line would do) to query this knowledge base b
 
 commands - 
 ruby bin/imdb_scrapper.rb 5
-ruby bin/imdb_scrapper.rb 'Morgan Freeman'
+ruby bin/imdb_scrapper.rb 'Morgan Freeman' 
 ruby bin/imdb_scrapper.rb 'Morgan Freeman' 2
