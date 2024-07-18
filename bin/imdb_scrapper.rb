@@ -13,25 +13,30 @@ class IMDb
   def print_top_movies(n)
     url = 'https://www.imdb.com/chart/top/?ref_=nv_mv_mpm'
     response = HTTP.headers('User-Agent' => 'Mozilla/5.0').get(url)
-
     if response.status.success?
       body = response.body.to_s
       html = Nokogiri::HTML(body)
       script_tag = html.at('script[type="application/ld+json"]')
       json_data = JSON.parse(script_tag.content)
-
       items = json_data['itemListElement']
+
+      threads = []
       items.first(n).each do |item|
         movie_name = item['item']['name']
         movie_id = insert_movie(movie_name)
         cast_url = item['item']['url']
-        actors = fetch_actors(cast_url)
-        actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
 
-        actors_ids.each do |actor_id|
-          insert_actor_movie_mapping(movie_id, actor_id)
+        threads << Thread.new do
+          actors = fetch_actors(cast_url)
+          actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
+
+          actors_ids.each do |actor_id|
+            insert_actor_movie_mapping(movie_id, actor_id)
+          end
         end
       end
+
+      threads.each(&:join)
       puts "Top #{n} movies...."
       print_movies (n)
     else
@@ -117,10 +122,10 @@ imdb_obj = IMDb.new
 
 if ARGV.length == 1
   command = ARGV.first.to_i
-  if(command.is_a? Integer and command != 0)
+  if(command.is_a? Integer)
     imdb_obj.print_top_movies(command)
   else
-    imdb_obj.fetch_movies_by_actor(ARGV[0])
+    puts "wrong input!!"
   end
 elsif ARGV.length == 2
   imdb_obj.fetch_movies_by_actor(ARGV[0], ARGV[1].to_i)
