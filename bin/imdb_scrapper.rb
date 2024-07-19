@@ -20,13 +20,13 @@ class IMDb
       json_data = JSON.parse(script_tag.content)
       items = json_data['itemListElement']
 
-      threads = []
+      # threads = []
       items.first(n).each do |item|
         movie_name = item['item']['name']
         movie_id = insert_movie(movie_name)
         cast_url = item['item']['url']
 
-        threads << Thread.new do
+        Thread.new do
           actors = fetch_actors(cast_url)
           actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
 
@@ -36,7 +36,7 @@ class IMDb
         end
       end
 
-      threads.each(&:join)
+      # threads.each(&:join)
       puts "Top #{n} movies...."
       print_movies (n)
     else
