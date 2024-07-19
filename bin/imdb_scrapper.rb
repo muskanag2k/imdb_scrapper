@@ -3,53 +3,53 @@ require 'nokogiri'
 require 'http'
 require 'json'
 require 'pg'
+require 'redis'
 
 class IMDb
 
   def initialize
     @db = PG.connect(dbname: 'imdb_scrapper_development')
-    @cache_response
+    @redis = Redis.new(url: 'redis://localhost:6379/0')
   end
 
   def fetch_movies
     url = 'https://www.imdb.com/chart/top/?ref_=nv_mv_mpm'
     response = HTTP.headers('User-Agent' => 'Mozilla/5.0').get(url)
-    if(@cache_response.nil?)
-      @cache_response = response
-    elsif response != @cache_response
-      @cache_response = response
-      insert_updated_movies(response)
-    end
-    response
-  end
-
-  def print_top_movies(n)
-    response = fetch_movies
     if response.status.success?
       body = response.body.to_s
       html = Nokogiri::HTML(body)
       script_tag = html.at('script[type="application/ld+json"]')
       json_data = JSON.parse(script_tag.content)
-      items = json_data['itemListElement']
-      items.first(n).each do |item|
-        movie_name = item['item']['name']
-        movie_id = insert_movie(movie_name)
-        cast_url = item['item']['url']
-        Thread.new do
-          actors = fetch_actors(cast_url)
-          actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
-          actors_ids.each do |actor_id|
-            insert_actor_movie_mapping(movie_id, actor_id)
-          end
-        end
-      end
 
-      puts "Top #{n} movies...."
-      print_movies (n)
+      cached_data = @redis.get(url)
+      if !cached_data or cached_data != Base64.strict_encode64(JSON.pretty_generate(json_data))
+        insert_updated_movies(json_data)
+        @redis.set(url, Base64.strict_encode64(JSON.pretty_generate(json_data)))
+      end
+      json_data
     else
       puts "Error fetching the IMDb Top 250 page: #{response.status}"
     end
+  end
 
+  def print_top_movies(n)
+    json_data = fetch_movies
+    items = json_data['itemListElement']
+    items.first(n).each do |item|
+      movie_name = item['item']['name']
+      movie_id = insert_movie(movie_name)
+      cast_url = item['item']['url']
+      Thread.new do
+        actors = fetch_actors(cast_url)
+        actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
+        actors_ids.each do |actor_id|
+          insert_actor_movie_mapping(movie_id, actor_id)
+        end
+      end
+    end
+
+    puts "Top #{n} movies...."
+    print_movies (n)
   rescue StandardError => e
     puts "Error fetching or parsing data: #{e.message}"
   end
@@ -122,12 +122,9 @@ class IMDb
     end
   end
 
-  def insert_updated_movies(response)
-    if response.status.success?
-      body = response.body.to_s
-      html = Nokogiri::HTML(body)
-      script_tag = html.at('script[type="application/ld+json"]')
-      json_data = JSON.parse(script_tag.content)
+  def insert_updated_movies(data)
+    if data
+      json_data = data
       items = json_data['itemListElement']
 
       items.each do |item|

@@ -42,3 +42,5 @@ gem 'connection_pool'
 
 gem 'rspec'
 gem 'http'
+
+gem 'redis'
