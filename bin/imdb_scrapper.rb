@@ -8,35 +8,42 @@ class IMDb
 
   def initialize
     @db = PG.connect(dbname: 'imdb_scrapper_development')
+    @cache_response
+  end
+
+  def fetch_movies
+    url = 'https://www.imdb.com/chart/top/?ref_=nv_mv_mpm'
+    response = HTTP.headers('User-Agent' => 'Mozilla/5.0').get(url)
+    if(@cache_response.nil?)
+      @cache_response = response
+    elsif response != @cache_response
+      @cache_response = response
+      insert_updated_movies(response)
+    end
+    response
   end
 
   def print_top_movies(n)
-    url = 'https://www.imdb.com/chart/top/?ref_=nv_mv_mpm'
-    response = HTTP.headers('User-Agent' => 'Mozilla/5.0').get(url)
+    response = fetch_movies
     if response.status.success?
       body = response.body.to_s
       html = Nokogiri::HTML(body)
       script_tag = html.at('script[type="application/ld+json"]')
       json_data = JSON.parse(script_tag.content)
       items = json_data['itemListElement']
-
-      # threads = []
       items.first(n).each do |item|
         movie_name = item['item']['name']
         movie_id = insert_movie(movie_name)
         cast_url = item['item']['url']
-
         Thread.new do
           actors = fetch_actors(cast_url)
           actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
-
           actors_ids.each do |actor_id|
             insert_actor_movie_mapping(movie_id, actor_id)
           end
         end
       end
 
-      # threads.each(&:join)
       puts "Top #{n} movies...."
       print_movies (n)
     else
@@ -61,8 +68,7 @@ class IMDb
 
   def insert_movie(name)
     existing_movie = @db.exec_params("SELECT id FROM movies WHERE name = $1", [name])
-
-    if existing_movie.nil?
+    if existing_movie.ntuples == 0
       result = @db.exec_params("INSERT INTO movies (name, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id", [name])
       result[0]['id'].to_i
     else
@@ -73,7 +79,7 @@ class IMDb
   def insert_actor(name)
     existing_actor = @db.exec_params("SELECT id FROM actors WHERE name = $1", [name])
 
-    if existing_actor.nil?
+    if existing_actor.ntuples == 0
       result = @db.exec_params("INSERT INTO actors (name, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id", [name])
       result[0]['id'].to_i
     else
@@ -97,7 +103,7 @@ class IMDb
     end
   end
 
-  def fetch_movies_by_actor(actor_name, m = 1)
+  def fetch_movies_by_actor(actor_name, m = 2)
     puts "Top #{m} movies of #{actor_name}.."
     result = @db.exec <<-SQL
       SELECT M.name AS movie_name
@@ -115,6 +121,37 @@ class IMDb
       puts "#{index+1}. #{row['movie_name']}"
     end
   end
+
+  def insert_updated_movies(response)
+    if response.status.success?
+      body = response.body.to_s
+      html = Nokogiri::HTML(body)
+      script_tag = html.at('script[type="application/ld+json"]')
+      json_data = JSON.parse(script_tag.content)
+      items = json_data['itemListElement']
+
+      items.each do |item|
+        movie_name = item['item']['name']
+        movie_id = insert_movie(movie_name)
+        cast_url = item['item']['url']
+
+        Thread.new do
+          actors = fetch_actors(cast_url)
+          actors_ids = actors.map { |actor_name| insert_actor(actor_name) }
+
+          actors_ids.each do |actor_id|
+            insert_actor_movie_mapping(movie_id, actor_id)
+          end
+        end
+      end
+    else
+      puts "Error fetching the IMDb Top 250 page: #{response.status}"
+    end
+
+  rescue StandardError => e
+    puts "Error fetching or parsing data: #{e.message}"
+  end
+
 end
 
 

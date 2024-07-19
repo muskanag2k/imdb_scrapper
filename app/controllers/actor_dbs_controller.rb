@@ -1,0 +1,2 @@
+class ActorDbsController < ApplicationController
+end

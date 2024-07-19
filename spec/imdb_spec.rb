@@ -2,7 +2,7 @@ require 'rspec'
 require_relative '../bin/imdb_scrapper'
 
 RSpec.describe IMDb do
-  
+
   before(:each) do
     @imdb_obj = IMDb.new
   end
@@ -15,10 +15,10 @@ RSpec.describe IMDb do
     end
   end
 
-  describe '#fetch_actors' do
-    it 'fetches actors from a valid movie URL' do
-      actors = @imdb_obj.fetch_actors('https://www.imdb.com/title/tt0111161/fullcredits')
-      puts actors.first(5)
+  describe '#fetch_movies_by_actor' do
+    it 'fetch movies by actor' do
+      movies = @imdb_obj.fetch_movies_by_actor('Morgan Freeman')
+      puts movies
     end
   end
 
