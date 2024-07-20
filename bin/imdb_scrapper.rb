@@ -22,9 +22,12 @@ class IMDb
       json_data = JSON.parse(script_tag.content)
 
       cached_data = @redis.get(url)
-      if !cached_data or cached_data != Base64.strict_encode64(JSON.pretty_generate(json_data))
+      encode_response = Base64.strict_encode64(JSON.pretty_generate(json_data))
+      if !cached_data or cached_data != encode_response
         insert_updated_movies(json_data)
-        @redis.set(url, Base64.strict_encode64(JSON.pretty_generate(json_data)))
+        @redis.set(url, encode_response)
+      else
+        puts "No update."
       end
       json_data
     else

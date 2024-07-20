@@ -20,8 +20,8 @@
 # Learn more: http://github.com/javan/whenever
 
 
-set :output, "log/cron.log"
+set :output, "/Users/muskanagarwal/Documents/imdb_scrapper/log/cron.log"
 
-every 20.minutes do
+every 15.minutes do
   rake "notify:movie_update"
 end

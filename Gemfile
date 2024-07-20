@@ -44,3 +44,4 @@ gem 'rspec'
 gem 'http'
 
 gem 'redis'
+gem 'dotenv-rails', groups: [:development, :test]
